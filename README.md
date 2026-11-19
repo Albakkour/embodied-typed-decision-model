@@ -1,1 +1,1 @@
-###Embodied typed decision model
+Embodied typed decision model
