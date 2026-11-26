@@ -1,0 +1,115 @@
+from pathlib import Path
+import inspect
+
+import torch
+
+from libero.libero import benchmark, get_libero_path
+from libero.libero.envs import OffScreenRenderEnv
+
+
+def main():
+
+    suite = benchmark.get_benchmark_dict()["libero_10"]()
+    task = suite.get_task(0)
+
+    bddl_file = (
+        Path(get_libero_path("bddl_files")) / task.problem_folder / task.bddl_file
+    )
+
+    init_file = (
+        Path(get_libero_path("init_states"))
+        / task.problem_folder
+        / task.init_states_file
+    )
+
+    states = torch.load(
+        init_file,
+        map_location="cpu",
+        weights_only=False,
+    )
+
+    env = OffScreenRenderEnv(
+        bddl_file_name=str(bddl_file),
+        camera_heights=128,
+        camera_widths=128,
+    )
+
+    try:
+        env.reset()
+        env.set_init_state(states[0])
+
+        task_env = env.env
+
+        print("\n========== PREDICATE IMPLEMENTATION ==========")
+
+        predicate_fn = task_env._eval_predicate.__globals__["eval_predicate_fn"]
+
+        print("Function:", predicate_fn)
+        print("Module:", predicate_fn.__module__)
+
+        print("\nSource code:")
+        print(inspect.getsource(predicate_fn))
+
+        print("\n========== OBJECT STATE TYPES ==========")
+
+        object_names = [
+            "alphabet_soup_1",
+            "tomato_sauce_1",
+            "basket_1",
+            "basket_1_contain_region",
+        ]
+
+        for name in object_names:
+            state = task_env.object_states_dict.get(name)
+
+            print(f"\n{name}")
+
+            if state is None:
+                print("Not present in object_states_dict")
+                continue
+
+            print("Type:", type(state))
+            print("Module:", type(state).__module__)
+
+            relevant_methods = [
+                method
+                for method in dir(state)
+                if any(
+                    word in method.lower()
+                    for word in [
+                        "contain",
+                        "check",
+                        "inside",
+                        "position",
+                        "region",
+                    ]
+                )
+            ]
+
+            print("Relevant methods:", relevant_methods)
+
+        print("\n========== ACTUAL INITIAL PREDICATES ==========")
+
+        for goal in task_env.parsed_problem["goal_state"]:
+            predicate, object_a, object_b = goal
+
+            state_a = task_env.object_states_dict[object_a]
+            state_b = task_env.object_states_dict[object_b]
+
+            result = predicate_fn(
+                predicate,
+                state_a,
+                state_b,
+            )
+
+            print(f"{object_a} {predicate} {object_b}: {result}")
+
+        print("\n========== TASK SUCCESS ==========")
+        print("Success:", env.check_success())
+
+    finally:
+        env.close()
+
+
+if __name__ == "__main__":
+    main()

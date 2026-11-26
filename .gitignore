@@ -28,3 +28,10 @@ checkpoints/
 # Logs
 logs/
 *.log
+
+# LIBERO environment and external code
+.venv-libero/
+external/LIBERO/
+
+# Generated debug outputs
+data/debug/
